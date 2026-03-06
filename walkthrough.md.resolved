@@ -1,0 +1,67 @@
+# Walkthrough — Sudoku Solver with Image Recognition
+
+## What Was Built
+
+Transformed the single-file [Algorithm.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c) Sudoku solver into a modular project that supports **two input modes**:
+1. **Manual input** — type cell values via terminal (original behavior)
+2. **Image recognition** — provide a cropped Sudoku grid image, automatically read digits via OCR
+
+## Files Created/Modified
+
+| File | Purpose |
+|------|---------|
+| [solver.h](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/solver.h) | Solver function declarations |
+| [solver.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/solver.c) | Backtracking solver + pretty grid printing (box-drawing chars) |
+| [image_reader.h](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/image_reader.h) | Image reader declarations |
+| [image_reader.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/image_reader.c) | Full OCR pipeline: load → grayscale → split → threshold → empty detection → Tesseract |
+| [main.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/main.c) | Unified entry point with `--image` flag + solve timing |
+| [Makefile](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Makefile) | Build system with Tesseract/Leptonica pkg-config |
+| [stb_image.h](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/stb_image.h) | Bundled image loading library |
+| [stb_image_write.h](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/stb_image_write.h) | Bundled image writing library |
+| [ROADMAP.md](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/ROADMAP.md) | Comprehensive 5-phase project evolution document |
+
+## Dependencies Installed
+- **Tesseract OCR** (via `brew install tesseract`)
+- **pkg-config** (via `brew install pkg-config`)
+
+## Compilation Result
+
+```
+✅ make → gcc compiles successfully with Tesseract + Leptonica linking
+   Output binary: ./sudoku (197KB)
+```
+
+## Test: Manual Input Mode
+
+```
+$ echo "5 3 0 0 7 0 0 0 0 6 0 0 ..." | ./sudoku
+
+  ╔══════════════════════════════════════════╗
+  ║         🧩 SUDOKU SOLVER v2.0 🧩         ║
+  ║    Manual Input  •  Image Recognition    ║
+  ╚══════════════════════════════════════════╝
+
+  ─── Solved Sudoku Puzzle ───
+
+  ╔═══════╦═══════╦═══════╗
+  ║ 5 3 4 ║ 6 7 8 ║ 9 1 2 ║
+  ║ 6 7 2 ║ 1 9 5 ║ 3 4 8 ║
+  ...
+  ╚═══════╩═══════╩═══════╝
+
+  ⏱  Solve time: 325.0 µs    ✅
+```
+
+## Usage
+
+```bash
+make                           # Build
+./sudoku                       # Manual mode
+./sudoku --image puzzle.png    # Image mode
+./sudoku --help                # Show usage
+```
+
+## Remaining
+
+- Test image mode with a real cropped Sudoku grid image
+- If OCR accuracy needs tuning, adjust threshold/padding parameters in [image_reader.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/image_reader.c)

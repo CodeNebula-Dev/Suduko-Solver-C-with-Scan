@@ -1,0 +1,185 @@
+# Sudoku Solver — Image Recognition & Roadmap
+
+Add image-based input to the existing Sudoku solver so a user can provide a cropped Sudoku grid image instead of typing 81 values manually. Also add solve-time measurement and write a comprehensive roadmap document explaining the project evolution.
+
+## User Review Required
+
+> [!IMPORTANT]
+> **Tesseract OCR is required.** The image recognition feature depends on `libtesseract` being installed on your Mac. You can install it via Homebrew:
+> ```
+> brew install tesseract
+> ```
+> Please confirm you have (or are willing to install) Tesseract before I proceed.
+
+> [!NOTE]
+> The approach assumes the input image is a **cleanly cropped photograph or screenshot** of a Sudoku grid. Grid detection uses a simple uniform 9×9 subdivision (no perspective correction or Hough line detection) since you mentioned the images will be "perfectly cropped."
+
+## Proposed Changes
+
+### Solver Core (refactored from Algorithm.c)
+
+#### [MODIFY] [Algorithm.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c)
+
+- **Extract solver functions** ([printMatrix](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c#9-17), [isValid](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c#21-54), [findEmptyCell](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c#58-68), [solveSudoku](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c#72-100)) into a separate `solver.h` / `solver.c` pair so they can be reused by both input modes.
+- **Add timing** — wrap the [solveSudoku()](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c#72-100) call with `clock()` from `<time.h>` to measure and print elapsed time in milliseconds.
+- **Add dual input modes** — accept a CLI flag:
+  - `./sudoku` → manual scanf mode (existing behavior)
+  - `./sudoku --image <path.png>` → image recognition mode
+
+---
+
+### New Files
+
+#### [NEW] [solver.h](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/solver.h)
+
+Header declaring the solver API:
+- `void printMatrix(int matrix[9][9])`
+- `bool isValid(int matrix[9][9], int row, int col, int num)`
+- `bool findEmptyCell(int matrix[9][9], int *row, int *col)`
+- `bool solveSudoku(int matrix[9][9])`
+
+#### [NEW] [solver.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/solver.c)
+
+Implementation of the solver functions (moved from [Algorithm.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c)).
+
+#### [NEW] [image_reader.h](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/image_reader.h)
+
+Header declaring:
+- `int readSudokuFromImage(const char *imagePath, int matrix[9][9])`
+
+#### [NEW] [image_reader.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/image_reader.c)
+
+Image processing pipeline:
+1. **Load image** using `stb_image.h` (single-header, bundled in project)
+2. **Convert to grayscale** if not already
+3. **Divide into 9×9 grid** — compute cell width = `image_width / 9`, cell height = `image_height / 9`
+4. **For each cell:**
+   - Extract cell region as a sub-image
+   - Apply binary thresholding (pixel > 128 → white, else black)
+   - Check if cell is empty (count dark pixels; if below threshold → cell = 0)
+   - If not empty → pass cell image to **Tesseract** via the C API (`TessBaseAPISetImage`, `TessBaseAPIGetUTF8Text`) with whitelist `"123456789"` 
+   - Parse recognized character → integer (1–9), or 0 if recognition fails
+5. Return the populated 9×9 matrix
+
+#### [NEW] [stb_image.h](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/stb_image.h)
+
+The public-domain [stb_image](https://github.com/nothings/stb) single-header image loader. Downloaded and bundled.
+
+#### [NEW] [stb_image_write.h](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/stb_image_write.h)
+
+Used to write individual cell images to temp files for Tesseract processing.
+
+#### [NEW] [main.c](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/main.c)
+
+Unified entry point:
+```c
+int main(int argc, char *argv[]) {
+    int matrix[9][9];
+    
+    if (argc >= 3 && strcmp(argv[1], "--image") == 0) {
+        // Image mode
+        readSudokuFromImage(argv[2], matrix);
+    } else {
+        // Manual mode (scanf)
+        manualInput(matrix);
+    }
+    
+    printf("Initial Sudoku puzzle:\n");
+    printMatrix(matrix);
+    
+    clock_t start = clock();
+    if (solveSudoku(matrix)) {
+        clock_t end = clock();
+        double elapsed = (double)(end - start) / CLOCKS_PER_SEC * 1000.0;
+        printf("\nSolved Sudoku puzzle:\n");
+        printMatrix(matrix);
+        printf("\nTime to solve: %.3f ms\n", elapsed);
+    } else {
+        printf("\nNo solution exists!\n");
+    }
+}
+```
+
+#### [NEW] [Makefile](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Makefile)
+
+Build system using `gcc`:
+```makefile
+CC = gcc
+CFLAGS = -Wall -O2 $(shell pkg-config --cflags tesseract)
+LDFLAGS = $(shell pkg-config --libs tesseract) -lm
+SRCS = main.c solver.c image_reader.c
+TARGET = sudoku
+
+$(TARGET): $(SRCS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS) $(LDFLAGS)
+
+clean:
+	rm -f $(TARGET)
+```
+
+---
+
+### Roadmap Documentation
+
+#### [NEW] [ROADMAP.md](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/ROADMAP.md)
+
+A comprehensive markdown document covering the full project evolution:
+
+1. **Phase 1 — The Raw Approach (Manual Input)**
+   - How we started: scanf for each cell (1,1), (1,2), …
+   - Entering 0 for empty cells
+   - The pain point: 81 manual entries per puzzle
+
+2. **Phase 2 — The Solving Algorithm**
+   - Backtracking approach explained step-by-step
+   - [isValid()](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c#21-54) — row, column, and 3×3 subgrid checks
+   - [findEmptyCell()](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c#58-68) — scanning for zeroes
+   - [solveSudoku()](file:///Users/devanshkhosla/Projects/Suduko%20Solver%20C%20with%20Scan%20/Algorithm.c#72-100) — recursive backtracking
+   - Time complexity discussion
+
+3. **Phase 3 — The Automation Idea**
+   - Why image input? Eliminating manual entry
+   - The concept: crop → divide → recognize → solve
+   - Technology choices: `stb_image` + Tesseract OCR
+   - Cell extraction logic explained with diagrams
+
+4. **Phase 4 — Integration & Timing**
+   - Merging both input modes
+   - Measuring performance with `clock()`
+   - CLI interface design
+   - Build system with Makefile
+
+5. **Future Ideas**
+   - Perspective correction for angled photos
+   - Mobile camera input
+   - GUI output with solved grid overlay
+
+---
+
+## Verification Plan
+
+### Automated Tests
+
+1. **Compilation test:**
+   ```bash
+   cd "/Users/devanshkhosla/Projects/Suduko Solver C with Scan " && make
+   ```
+   — Must compile without errors or warnings.
+
+2. **Manual input mode test:**
+   ```bash
+   echo "5 3 0 0 7 0 0 0 0 6 0 0 1 9 5 0 0 0 0 9 8 0 0 0 0 6 0 8 0 0 0 6 0 0 0 3 4 0 0 8 0 3 0 0 1 7 0 0 0 2 0 0 0 6 0 6 0 0 0 0 2 8 0 0 0 0 4 1 9 0 0 5 0 0 0 0 8 0 0 7 9" | ./sudoku
+   ```
+   — Must print the initial puzzle and solved output with timing.
+
+3. **Image input mode test:**
+   - Use a sample Sudoku grid image (I will provide one or generate one).
+   ```bash
+   ./sudoku --image sample_sudoku.png
+   ```
+   — Must correctly read and solve the puzzle from the image.
+
+### Manual Verification
+
+- **You (the user) should verify** the image recognition accuracy by comparing the recognized grid printout against the actual Sudoku image. If digits are misread, we may need to tune the thresholding or Tesseract parameters.
+- **Check the ROADMAP.md** reads well and accurately describes the project evolution.
